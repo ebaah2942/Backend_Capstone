@@ -35,6 +35,9 @@ DEBUG = False
 ALLOWED_HOSTS = config('ALLOWED_HOSTS').split(',')
 
 
+
+
+
 # Application definition
 
 INSTALLED_APPS = [
@@ -56,7 +59,6 @@ MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
-    'api.middleware.DisableCSRFForAPI',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
@@ -173,4 +175,7 @@ SIMPLE_JWT = {
     'BLACKLIST_AFTER_ROTATION': True,  # If using token blacklisting
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
+
+
+SECURE_SSL_REDIRECT = False
 
