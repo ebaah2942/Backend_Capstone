@@ -22,17 +22,15 @@ from django.http import Http404
 from django.utils.decorators import method_decorator
 # Create your views here.
 
-# class CustomUserViewSet(viewsets.ModelViewSet):
-#     queryset = CustomUser.objects.all()
-#     serializer_class = CustomUserSerializer
-#     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+
+# It uses regular expressions to find all hashtags in the post.content
 def extract_and_save_hashtag(post, text):
     hashtags = re.findall(r'#(\w+)', post.content)
     for tags in hashtags:
         hashtag, created = Hashtag.objects.get_or_create(name=tags.lower())
         post.Hashtags.add(hashtag)
 
-       
+    #This function generates and returns a dictionary containing a refresh token and an access token for a given user    
 def get_tokens_for_user(user):
     refresh = RefreshToken.for_user(user)
 
@@ -40,6 +38,8 @@ def get_tokens_for_user(user):
         'refresh': str(refresh),
         'access': str(refresh.access_token)
     }    
+# This class definition defines a view for handling user registration
+# Note that the permission_classes attribute allows any user to access this view, regardless of their authentication status
 @method_decorator(csrf_exempt, name='dispatch')
 class RegisterView(APIView):
     permission_classes = [AllowAny]
@@ -66,7 +66,7 @@ class RegisterView(APIView):
             "tokens": token
         }, status=status.HTTP_201_CREATED)
       
-
+# This class definition defines a view for handling user login
 class LoginView(APIView):
     permission_classes = [AllowAny]
 
@@ -87,7 +87,8 @@ class LoginView(APIView):
             }, status.HTTP_200_OK)
         return Response({'error': 'Invalid username or password.'}, status=401)
 
-
+# This class definition defines a view for handling user logout requests
+# Note that the permission_classes = [IsAuthenticated] line ensures that only authenticated users can access this view
 class LogoutView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -101,10 +102,11 @@ class LogoutView(APIView):
         except Exception as e:
             return Response({'error': 'Invalid refresh token.'}, status=status.HTTP_400_BAD_REQUEST)
 
-
+# This class definition defines a view for handling user profile updates
 class ProfileView(APIView):
     permission_classes = [IsAuthenticated]
-
+    # Updates a user's profile information with the data provided in the request.
+    # Returns the updated user data if the update is successful, or an error message if the update fails.
     def put(self, request):
         user = request.user
         serializer = CustomUserSerializer(user, data=request.data, partial=True)
@@ -114,12 +116,14 @@ class ProfileView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)               
 
 
+# This class definition, PostPagination, is used to paginate a list of posts in an API. Here's what each attribute does
 class PostPagination(PageNumberPagination):
     page_size = 10  # Number of posts per page
     page_size_query_param = 'page_size'  # Allow clients to set custom page size
     max_page_size = 50  #
 
 
+# This class definition, FeedView, is used to retrieve a list of posts in an API
 class FeedView(ListAPIView):
     queryset = Post.objects.all()
     serializer_class = PostSerializer
@@ -129,6 +133,9 @@ class FeedView(ListAPIView):
     ordering_fields = ['timestamp', 'likes', 'comments']  # Allow sorting by date, likes, or comments
     ordering = ['-timestamp']  # Default sorting: most recent posts first
 
+
+# This class definition, PostViewSet, is a viewset for handling CRUD (Create, Read, Update, Delete) operations on posts.
+# Note that the update and destroy methods override the default behavior of the ModelViewSet to enforce ownership-based permissions.
 class PostViewSet(viewsets.ModelViewSet):
     queryset = Post.objects.all()
     serializer_class = PostSerializer
@@ -137,7 +144,7 @@ class PostViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
-
+    # This method is used to filter the queryset based on the 'hashtag' and 'tagged_users' query parameters
     def get_queryset(self):
         hashtag = self.request.query_params.get('hashtag')
         tagged_user = self.request.query_params.get('tagged_users')
@@ -154,6 +161,7 @@ class PostViewSet(viewsets.ModelViewSet):
         
         return super().get_queryset()
     
+    # This method is used to retrieve the top 10 most liked posts in the last 24 hours
     @action(detail=True, methods=['get'])
     def trending(self, request):
         hourly = now() - timedelta(hours=24)
@@ -162,21 +170,23 @@ class PostViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
         
-
+    # This method overrides the default update method to enforce ownership-based permissions
     def update(self, request, *args, **kwargs):
         post = self.get_object()
         if post.user != request.user:
             return Response({"error": "You can only update your own posts."}, status=status.HTTP_403_FORBIDDEN)
         return super().update(request, *args, **kwargs)
-
+    
+    # This method overrides the default destroy method to enforce ownership-based permissions
     def destroy(self, request, *args, **kwargs):
         post = self.get_object()
         if post.user != request.user:
             return Response({"error": "You can only delete your own posts."}, status=status.HTTP_403_FORBIDDEN)
         return super().destroy(request, *args, **kwargs)
+        return Response({"message": "Post deleted successfully."}, status=status.HTTP_204_NO_CONTENT)
     
 
-
+# This class definition, FollowViewSet, is a viewset for handling CRUD (Create, Read, Update, Delete) operations on follows.
 class FollowViewSet(viewsets.ModelViewSet):
     queryset = Follow.objects.all()
     serializer_class = FollowSerializer
@@ -205,7 +215,7 @@ class FollowViewSet(viewsets.ModelViewSet):
         else :
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
-
+    # This method overrides the default destroy method to enforce ownership-based permissions
     def destroy (self, request, *args, **kwargs):
         try:
             follow = self.get_object()
@@ -215,12 +225,13 @@ class FollowViewSet(viewsets.ModelViewSet):
             return Response({"error": "You can only unfollow user you are following."}, status=status.HTTP_403_FORBIDDEN)
         return super().destroy(request, *args, **kwargs)    
 
-
+    # This class definition, LikeViewset, is a viewset for handling CRUD (Create, Read, Update, Delete) operations on likes
 class LikeViewset(viewsets.ModelViewSet):
     queryset = Like.objects.all()
     permission_classes = [IsAuthenticated]
     serializer_class = LikeSerializer
-
+    
+    #  This is a custom action method. It is triggered when a POST request is made to the toggle_like endpoint
     @action(detail=True, methods=['post'])
     def toggle_like(self, request, pk=None):
         post = Post.objects.get(id=pk)
@@ -230,20 +241,26 @@ class LikeViewset(viewsets.ModelViewSet):
             return Response({"message": "Unliked successfully."}, status=status.HTTP_200_OK)
         return Response({"message": "Liked successfully."}, status=status.HTTP_200_OK)
 
-
+    
+# This class definition, CommentViewset, is a viewset for handling CRUD (Create, Read, Update, Delete) operations on comments
+# Note that this class definition does not explicitly define any methods, which means it will inherit the default CRUD methods. 
 class CommentViewSet(viewsets.ModelViewSet):
     queryset = Comment.objects.all()
     serializer_class = CommentSerializer
     permission_classes = [IsAuthenticated]
 
+
+# This class definition, NotificationViewset, is a viewset for handling CRUD (Create, Read, Update, Delete) operations on notifications
 class NotificationViewSet(viewsets.ModelViewSet):
     queryset = Notification.objects.all()
     serializer_class = NotificationSerializer
     permission_classes = [IsAuthenticated]
 
+    # This method overrides the default get_queryset method to filter notifications based on the current user
     def get_queryset(self):
         return self.get_queryset.filter(recipient=self.request.user)
     
+    # This is a custom action method. It is triggered when a POST request is made to the mark_as_read endpoint
     @action(detail=True, methods=['post'])
     def mark_as_read(self, request,):
         notifications = self.queryset.filter(receiver=request.user, is_read=False)
@@ -254,19 +271,20 @@ class NotificationViewSet(viewsets.ModelViewSet):
 
 
 
-    
+# This class definition, MessageViewset, is a viewset for handling CRUD (Create, Read, Update, Delete) operations on messages 
 class MessageViewSet(viewsets.ModelViewSet):
     queryset = Message.objects.all()
     serializer_class = MessageSerializer
     permission_classes = [IsAuthenticated]
 
 
+# This class definition, SharedPostViewset, is a viewset for handling CRUD (Create, Read, Update, Delete) operations on shared posts
 class SharedPostViewSet(viewsets.ModelViewSet):
     queryset = SharedPost.objects.all()
     serializer_class = SharedPostSerializer
     permission_classes = [IsAuthenticated]
 
-
+# This class definition, HashtagViewset, is a viewset for handling CRUD (Create, Read, Update, Delete) operations on hashtags
 class HashtagViewSet(viewsets.ModelViewSet):
     queryset = Hashtag.objects.all()
     serializer_class = HashtagSerializer

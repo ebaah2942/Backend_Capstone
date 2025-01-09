@@ -4,6 +4,7 @@ import re
 
 # Create your models here.
 
+# This class definition creates a custom user model in Django, inheriting from the built-in AbstractUser model
 class CustomUser(AbstractUser):
     bio = models.TextField(max_length=500, blank=True)
     profile_picture = models.ImageField(upload_to='profile_pictures/', blank=True, null=True)
@@ -29,7 +30,7 @@ class Post(models.Model):
     timestamp = models.DateTimeField(auto_now_add=True)
     media = models.FileField(upload_to='media/', blank=True, null=True) 
 
-
+    #The save method is overridden to include the extraction and assignment of hashtags and tagged users. 
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs) 
         self._extract_and_assign_hashtags()
@@ -55,7 +56,9 @@ class Post(models.Model):
 class Follow(models.Model):
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='followers')
     followed_user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='following')    
-
+    
+    
+    # Ensures that a user cannot follow the same user twice 
     class Meta:
         unique_together = ('user', 'followed_user')
 
